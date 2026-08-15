@@ -2,6 +2,11 @@ include boards.mk
 
 VIVADO := vivado -mode batch -nolog -nojournal -source
 
+MODE        ?= jtag
+FAST        ?= 0
+THREADS     ?=
+INCREMENTAL ?= 1
+
 .PHONY: lint synth impl bitstream program all clean new-project
 
 ifneq ($(MAKECMDGOALS),new-project)
@@ -21,7 +26,9 @@ ifndef PART_$(BOARD)
 $(error Unknown BOARD '$(BOARD)' -- add it to boards.mk)
 endif
 
-PART  := $(PART_$(BOARD))
+PART        := $(PART_$(BOARD))
+CFGMEM      := $(CFGMEM_$(BOARD))
+CFGMEM_SIZE := $(CFGMEM_SIZE_$(BOARD))
 XDC   := $(PROJECT)/$(notdir $(PROJECT)).xdc
 SRCS  := $(filter-out $(PROJECT)/tb_%,$(wildcard $(PROJECT)/*.sv $(PROJECT)/*.v))
 BUILD := build/$(PROJECT)
@@ -32,12 +39,12 @@ lint:
 
 $(BUILD)/post_synth.dcp: $(SRCS) $(XDC)
 	mkdir -p $(BUILD)
-	$(VIVADO) scripts/synth.tcl -tclargs $(TOP) $(PART) "$(SRCS)" $(XDC) $(BUILD)
+	$(VIVADO) scripts/synth.tcl -tclargs $(TOP) $(PART) "$(SRCS)" $(XDC) $(BUILD) $(FAST) $(THREADS)
 
 synth: $(BUILD)/post_synth.dcp
 
 $(BUILD)/post_route.dcp: $(BUILD)/post_synth.dcp
-	$(VIVADO) scripts/impl.tcl -tclargs $(BUILD)
+	$(VIVADO) scripts/impl.tcl -tclargs $(BUILD) $(FAST) $(INCREMENTAL) $(THREADS)
 
 impl: $(BUILD)/post_route.dcp
 
@@ -47,7 +54,7 @@ $(BUILD)/$(TOP).bit: $(BUILD)/post_route.dcp
 bitstream: $(BUILD)/$(TOP).bit
 
 program: $(BUILD)/$(TOP).bit
-	$(VIVADO) scripts/program.tcl -tclargs $(BUILD)/$(TOP).bit
+	$(VIVADO) scripts/program.tcl -tclargs $(BUILD)/$(TOP).bit $(MODE) $(CFGMEM) $(CFGMEM_SIZE)
 
 all: bitstream
 
