@@ -12,7 +12,7 @@ module tb_full_adder;
         .sum (sum),
         .cout (cout)
     );
-    
+
 
     integer i;
 
@@ -31,6 +31,7 @@ module tb_full_adder;
                     a, b, cin, sum, cout, expected_sum, expected_cout
                 );
             end
+
         end
         $finish;
     end
