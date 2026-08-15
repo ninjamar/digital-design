@@ -1,0 +1,2 @@
+TOP   := CHANGE_ME
+BOARD := @BOARD@
