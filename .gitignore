@@ -3,3 +3,4 @@ build/
 *.log
 .Xil/
 webtalk*.log
+.slang
