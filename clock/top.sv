@@ -1,40 +1,46 @@
 module top #(
-    parameter real CLOCK_FREQ= 1.0,
+    parameter real CLOCK_FREQ = 1.0,
     parameter real DISPLAY_FREQ = 1000
-)(
+) (
     input logic clk,
     input logic rst,
-    output logic [6:0] seg, // cathode
-    output logic [3:0] an // anode
+    output logic [6:0] seg,  // cathode
+    output logic [3:0] an  // anode
 );
     // Enable module
-    logic digit_mod_en; // module enable
+    logic digit_mod_en;  // module enable
 
-    clock_enable_generator #(.FREQ(CLOCK_FREQ)) digit_clk_generator(
-        .pulse(digit_mod_en), .*
+    clock_enable_generator #(
+        .FREQ(CLOCK_FREQ)
+    ) digit_clk_generator (
+        .pulse(digit_mod_en),
+        .*
     );
 
     logic display_mod_en;
-    clock_enable_generator #(.FREQ(DISPLAY_FREQ)) display_clk_generator(
-        .pulse(display_mod_en),.*
+    clock_enable_generator #(
+        .FREQ(DISPLAY_FREQ)
+    ) display_clk_generator (
+        .pulse(display_mod_en),
+        .*
     );
 
     // Display module
-    logic [3:0] digits [3:0] = '{4'd0, 4'd0, 4'd0, 4'd0};
+    logic [3:0] digits[3:0] = '{4'd0, 4'd0, 4'd0, 4'd0};
     logic [1:0] digit_sel = 2'b0;
 
     display display (
         // .en (display_mod_en),
         .digit_sel(digit_sel),
-        .digit    (digits[digit_sel]),
+        .digit(digits[digit_sel]),
         .seg,
         .an
     );
-    
+
 
 
     logic [3:0] carry;
-    logic [3:0] digits_buf [3:0];
+    logic [3:0] digits_buf[3:0];
 
     // Keep logic combinational (blocking)
     always_comb begin
@@ -49,7 +55,7 @@ module top #(
                     carry = digits_buf[i] - 4'd9;
                     digits_buf[i] = 4'd0;
                 end
-                if ((carry > 0) && (i-1 >= 4'd0)) begin
+                if ((carry > 0) && (i - 1 >= 4'd0)) begin
                     digits_buf[i-1] = digits[i-1] + carry;
                     carry = 'b0;
                 end

@@ -1,9 +1,9 @@
-`timescale 1ns/1ps // 100 MHz driving clock;
+`timescale 1ns / 1ps  // 100 MHz driving clock;
 
 module tb_clocked_display;
-    
+
     logic clk = 0;
-    always #5 clk = ~clk; // 10 ns period = 100 mhz
+    always #5 clk = ~clk;  // 10 ns period = 100 mhz
 
     logic rst = 0;
     logic [6:0] seg;
@@ -16,12 +16,12 @@ module tb_clocked_display;
         .clk(clk),
         .rst(rst),
         .seg(seg),
-        .an (an)
+        .an(an)
     );
 
     initial begin
         $dumpfile("tb_clocked_display_wave.fst");
-        $dumpvars(2, tb_clocked_display); // depth 2
+        $dumpvars(2, tb_clocked_display);  // depth 2
         // check 
         for (int i = 0; i < 1000; i++) begin
             @(posedge dut.digit_mod_en);

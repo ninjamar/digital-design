@@ -1,5 +1,22 @@
 include boards.mk
 
+
+VERIBLE_FORMAT_FLAGS := \
+	--indentation_spaces=4 \
+	--wrap_spaces=4 \
+	--try_wrap_long_lines=true \
+	--named_port_alignment=flush-left \
+	--named_parameter_alignment=flush-left \
+	--port_declarations_alignment=flush-left \
+	--formal_parameters_alignment=flush-left \
+	--module_net_variable_alignment=flush-left \
+	--case_items_alignment=flush-left \
+	--struct_union_members_alignment=flush-left \
+	--formal_parameters_indentation=indent \
+	--port_declarations_indentation=indent \
+	--named_parameter_indentation=indent \
+	--named_port_indentation=indent
+
 VIVADO := vivado -mode batch -nolog -nojournal -source
 
 MODE        ?= jtag
@@ -49,7 +66,7 @@ else
 endif
 
 format:
-	verible-verilog-format --inplace $(ALL_SRCS)
+	verible-verilog-format $(VERIBLE_FORMAT_FLAGS) --inplace $(ALL_SRCS)
 
 testbench: testbench-build testbench-run
 
