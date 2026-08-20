@@ -20,18 +20,17 @@ module top #(
     );
 
     // Display module
-    logic [3:0] digit = 4'b0;
+    logic [3:0] digits [3:0] = '{4'd0, 4'd0, 4'd0, 4'd0};
     logic [1:0] digit_sel = 2'b0;
 
     display display (
-        .en (display_mod_en),
+        // .en (display_mod_en),
         .digit_sel(digit_sel),
-        .digit    (digit),
+        .digit    (digits[digit_sel]),
         .seg,
         .an
     );
     
-    logic [3:0] digits [3:0] = '{4'd0, 4'd0, 4'd0, 4'd0};
 
 
     logic [3:0] carry;
@@ -63,7 +62,13 @@ module top #(
             digits <= digits_buf;
         end
         if (display_mod_en) begin
-            digit <= digits[digit_sel];
+            // When using non-blocking logic, everything executes all at once:
+            // if i do digit <= digits[digit_sel] but change digit_sel in the line
+            // below, then digit gets the new value of digit_sel, which is not what
+            // I want. Remember: any reference updates anywhere, so digit is already
+            // redundant: I can drive display with digits[digit_sel]
+            // Setting digit <= digits[digit_sel]
+            // digit <= digits[digit_sel];
             digit_sel <= digit_sel + 'd1;
             // digit_sel <= (digit_sel + 'd1 > 'd4) ? 'd0 : (digit_sel + 'd1);
             // if (digit_sel > 'd4) digit_sel 
