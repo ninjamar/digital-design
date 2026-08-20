@@ -1,2 +1,2 @@
-TOP   := clock
+TOP   := top
 BOARD := basys3
