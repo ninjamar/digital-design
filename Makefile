@@ -60,7 +60,7 @@ endif
 
 lint:
 ifeq ($(LINTER),verilator)
-	verilator --lint-only --sv -Wall --Wno-fatal --top-module $(TOP) $(SRCS)
+	verilator --lint-only --sv -Wall --top-module $(TOP) $(SRCS)
 else
 	$(VIVADO) scripts/lint.tcl -tclargs $(TOP) $(PART) "$(SRCS)" $(XDC)
 endif
@@ -71,33 +71,10 @@ format:
 testbench: testbench-build testbench-run
 
 testbench-build:
-	@files="$(if $(TB),$(PROJECT)/$(TB),$(TB_SRCS))"; \
-	if [ -z "$$files" ]; then echo "No testbenches found in $(PROJECT)/"; exit 1; fi; \
-	for tb in $$files; do \
-		name=$$(basename "$$tb" .sv); name=$$(basename "$$name" .v); \
-		echo "=== building $$tb ==="; \
-		mkdir -p $(BUILD)/sim/$$name; \
-		if [ "$(SIMULATOR)" = "vivado" ]; then \
-			( cd $(BUILD)/sim/$$name && \
-			  xvlog -sv $(addprefix $(CURDIR)/,$(SRCS)) $(CURDIR)/$$tb && \
-			  xelab $$name -s $${name}_sim -debug typical ); \
-		else \
-			verilator --binary --timing -sv --Wno-fatal --trace-fst --top-module "$$name" -Mdir $(BUILD)/sim/$$name $(SRCS) "$$tb"; \
-		fi; \
-	done
+	./scripts/testbench.sh build $(PROJECT) $(SIMULATOR) $(BUILD) $(CURDIR) $(SRCS) -- $(if $(TB),$(PROJECT)/$(TB),$(TB_SRCS))
 
 testbench-run:
-	@files="$(if $(TB),$(PROJECT)/$(TB),$(TB_SRCS))"; \
-	if [ -z "$$files" ]; then echo "No testbenches found in $(PROJECT)/"; exit 1; fi; \
-	for tb in $$files; do \
-		name=$$(basename "$$tb" .sv); name=$$(basename "$$name" .v); \
-		echo "=== running $$tb ==="; \
-		if [ "$(SIMULATOR)" = "vivado" ]; then \
-			( cd $(BUILD)/sim/$$name && xsim $${name}_sim -R ); \
-		else \
-			$(BUILD)/sim/$$name/V$$name; \
-		fi; \
-	done
+	./scripts/testbench.sh run $(PROJECT) $(SIMULATOR) $(BUILD) $(CURDIR) $(SRCS) -- $(if $(TB),$(PROJECT)/$(TB),$(TB_SRCS))
 
 $(BUILD)/post_synth.dcp: $(SRCS) $(XDC)
 	mkdir -p $(BUILD)
