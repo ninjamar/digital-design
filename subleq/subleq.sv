@@ -30,122 +30,142 @@ module subleq (
         IDLE = 3'd0,
         FETCH = 3'd1,
         DECODE = 3'd2,
-        EXECUTE = 3'd3
-        // WRITE = 3'd4,
+        EXECUTE = 3'd3,
+        WRITE = 3'd4
         // WAIT = 3'd5
     } state_t;
 
+    // Control side
     state_t curr_state;
     state_t next_state;
-
-    logic [ADDR_SIZE-1:0] pc;
-    logic [ADDR_SIZE-1:0] pc_next;
 
     logic [3:0] step;
     logic [3:0] next_step;
 
-    // A, B, C
-    logic [XLEN-1:0] arg[0:2];  // 3 items each of XLEN-1:0.
+    // Datapath
+    typedef struct packed {
+        logic [ADDR_SIZE-1:0] pc;
+        // no unpacked vector inside struct
+        // logic [2:0][XLEN-1:0] args; // a, b, c
+        
+        logic [XLEN-1:0] a;
+        logic [XLEN-1:0] b;
+        logic [XLEN-1:0] c;
+        
+        logic [XLEN-1:0] mem_a;
+        logic [XLEN-1:0] mem_b;
 
-    logic [XLEN-1:0] arg_next[0:2];
-    logic [XLEN-1:0] mem_b;
-    logic [XLEN-1:0] mem_a;
-    logic [XLEN-1:0] temp;
-
-
-    // SUBLEQ: subtract and branch if less than or equal
-    // subleq a, b, c
-    // mem[b] = mem[b] - mem[a]
-    // if mem[b] <= 0: jump to c
-    // else: continue to next instruction (pc += 3)
+        logic signed [XLEN-1:0] sub_result;
+    } registers;
+    
+    // Control side
+    registers regs;
+    registers regs_next;
+    
+    // Datapath
     always_comb begin
+        // SUBLEQ: subtract and branch if less than or equal
+        // subleq a, b, c
+        // mem[b] = mem[b] - mem[a]
+        // if mem[b] <= 0: jump to c
+        // else: continue to next instruction (pc += 3)
+        
+        // States
         next_state = IDLE;
-        // arg_next = {XLEN'('b0), XLEN'('b0), XLEN'('b0)};
-        arg_next = arg; // falls through
-        mem_b = XLEN'('b0);
-        mem_a = XLEN'('b0);
-        temp = XLEN'('b0);
+        regs_next = regs;
+
+        // Safe defaults (combinational)
         read_addr = ADDR_SIZE'('b0);
         write_addr = ADDR_SIZE'('b0);
         write_val = XLEN'('b0);
         write_enable = 0;
-        pc_next = pc;
-        
+
         case (curr_state)
             IDLE: next_state = FETCH;
-            // Fetch a, b, and c (all stored in memory)
             FETCH: begin
-                // Fetch next 3 segments from memory
-                // Step goes from 0 to 2. This allows one read operation per
-                // cycle.
-                // pc+0, pc+1, pc+2
-                read_addr = pc + ADDR_SIZE'(step);
-                arg_next[step] = read_result;
-                if (step == 2) begin
-                    next_state = DECODE;
-                end else begin
-                    next_state = FETCH;
-                end
-            end
-            // Not much to do here
-            DECODE: next_state = EXECUTE;
-            // mem[b] = mem[b] - mem[a]
-            // check condition: jump via pc
-            EXECUTE: begin
-                // Fetch mem[b], mem[a]
-                next_state = EXECUTE;
+                // Load instruction from memory
                 case (step)
                     0: begin
-                        read_addr = arg[1];
-                        mem_b = read_result;
+                        read_addr = regs_next.pc;
+                        // Shift to mem wait state, then copy to a;
+                        // TODO: Switch from 0 cycle read (which may not
+                        // synthesize) to a 1 cycle read
+                        regs_next.a = read_result;
+                        next_state = FETCH;
                     end
                     1: begin
-                        read_addr = arg[0];
-                        mem_a = read_result;
+                        read_addr = regs_next.pc + 'd1;
+                        regs_next.b = read_result;
+                        next_state = FETCH;
                     end
                     2: begin
-                        
+                        read_addr = regs_next.pc + 'd2;
+                        regs_next.c = read_result;
+                        next_state = DECODE;
                     end
-                    3:
-                    4:
-                    5:
+                    default: ;
                 endcase
+            end
+            DECODE: next_state = EXECUTE;
+            EXECUTE: begin
+                // Execute instruction
 
-                
-                // Compute mem[b]
-                temp = mem_b - mem_a;
-                write_addr = arg[1];
-                write_val = temp;
+                // Need to fetch mem[b] and mem[a]
+                // Separate based on read cycle
+                case (step)
+                    // Mem a
+                    0: begin
+                        read_addr = regs_next.a;
+                        regs_next.mem_a = read_result;
+                        next_state = EXECUTE;
+                    end
+                    // Mem b
+                    1: begin
+                        read_addr = regs_next.b;
+                        regs_next.mem_b = read_result;
+                        next_state = EXECUTE;
+                    end
+
+                    2: begin
+                        // subtract mem[b] and mem[a]
+                        regs_next.sub_result = $signed(regs_next.mem_b - regs_next.mem_a);
+                        // store the final write of mem[b] (but do not write it to mem[b])
+                        // do the comparison, and update pc
+
+                        if (regs_next.sub_result <= 0) begin
+                            // jmp c
+                            regs_next.pc = regs_next.c;
+                        end else begin
+                            // increase pc
+                            regs_next.pc = regs_next.pc + 'd3;
+                        end
+
+                        next_state = WRITE;
+                    end
+
+                    default: ;
+                endcase
+            end
+            WRITE: begin
+                // write mem[b]
+                write_addr = regs_next.b;
+                write_val = $unsigned(regs_next.sub_result);
                 write_enable = 1;
-                write_enable = 0;
-                // Do the jump condition 
-                if (temp <= 0) begin
-                    pc_next = arg[2];
-                end else begin
-                    pc_next = pc + 3;
-                end
-
+                // write, then next cycle clear write_enable to 0
                 next_state = FETCH;
             end
-            // Write nmem[b]
-            // WRITE:
             // WAIT:
             default: ;
         endcase
     end
 
+    // Control
     always_ff @(posedge clk) begin
         if (rst) begin
-            // read_addr <= ADDR_SIZE'('b0);
-            // write_addr <= ADDR_SIZE'('b0);
-            // write_val <= XLEN'('b0);
-            // write_enable <= 0;
             curr_state <= IDLE;
-
-            pc <= ADDR_SIZE'('b0);
-
-            arg <= {XLEN'('b0), XLEN'('b0), XLEN'('b0)};
             step <= 'b0;
+
+            regs <= '{default: 0}; // reset back to default of 0
         end else begin
             // Only increment if we are not switching.
             if (curr_state == next_state) begin
@@ -155,9 +175,8 @@ module subleq (
             end
 
             curr_state <= next_state;
-            pc <= pc_next;
 
-            arg <= arg_next;            
+            regs <= regs_next;
         end
     end
 endmodule
