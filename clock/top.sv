@@ -1,3 +1,5 @@
+import constants::DEVICE_CLOCK_FREQ;
+
 module top #(
     parameter real CLOCK_FREQ = 1.0,
     parameter real DISPLAY_FREQ = 1000
@@ -10,7 +12,8 @@ module top #(
     // Enable module
     logic digit_mod_en;  // module enable
 
-    clock_enable_generator #(
+    clock_pulse_generator #(
+        .BASE_FREQ(DEVICE_CLOCK_FREQ),
         .FREQ(CLOCK_FREQ)
     ) digit_clk_generator (
         .pulse(digit_mod_en),
@@ -18,7 +21,8 @@ module top #(
     );
 
     logic display_mod_en;
-    clock_enable_generator #(
+    clock_pulse_generator #(
+        .BASE_FREQ(DEVICE_CLOCK_FREQ),
         .FREQ(DISPLAY_FREQ)
     ) display_clk_generator (
         .pulse(display_mod_en),

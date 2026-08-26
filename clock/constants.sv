@@ -1,3 +1,3 @@
 package constants;
-    localparam int CLOCK_FREQ = 10 ** 8;  // freq of clock; 100 mhz
+    localparam int DEVICE_CLOCK_FREQ = 10 ** 8;  // freq of clock; 100 mhz
 endpackage
