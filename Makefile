@@ -53,7 +53,7 @@ CFGMEM      := $(CFGMEM_$(BOARD))
 CFGMEM_SIZE := $(CFGMEM_SIZE_$(BOARD))
 XDC      := $(PROJECT)/$(notdir $(PROJECT)).xdc
 ALL_SRCS := $(wildcard $(PROJECT)/*.sv $(PROJECT)/*.v)
-SRCS     := $(filter-out $(PROJECT)/tb_%,$(ALL_SRCS))
+SRCS     := $(filter-out $(PROJECT)/tb_%,$(ALL_SRCS)) $(wildcard $(LIB))
 TB_SRCS  := $(filter $(PROJECT)/tb_%,$(ALL_SRCS))
 BUILD    := build/$(PROJECT)
 endif
