@@ -19,6 +19,9 @@ module mem_io_mux (
     - DONE;
     CPU waits from IDLE -> READING/WRITING -> DONE
     */
+    // TODO: Could somehow have a proper response packet here
+    logic [cpu_bus.ADDR_WIDTH-1:0] next_cpu_read_result;
+    
     typedef enum logic [3:0] {
         IDLE = 'd1,
         WRITING_IO = 'd2,
@@ -29,26 +32,25 @@ module mem_io_mux (
     } state_t;
 
     state_t state;
-    
-    // continuous assignment; could use always_comb but this is shorter
-    // assign status = (state == IDLE) ? busy::IDLE : busy::BUSY;
+    state_t next_state;
+        
     always_comb begin
-        if (cpu_bus.write_en || cpu_bus.read_en) begin
-            status = busy::BUSY;
-        end else begin
-            status = busy::IDLE;
-        end
-    end
+        next_state = IDLE;
+        io_bus.out_pkt = 'b0;
+        io_bus.out_en = 0;
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            state <= IDLE;
+        io_bus.in_en = 0;
 
-            mem_bus.write_en <= 0;
-            mem_bus.read_en <= 0;
-            io_bus.in_en <= 0;
-            io_bus.out_en <= 0;
-        end else case (state)
+
+        mem_bus.write_addr = 'b0;
+        mem_bus.write_val = 'b0;
+        mem_bus.write_en = 0;
+
+        mem_bus.read_addr = 'b0;
+        mem_bus.read_en = 0;
+
+        next_cpu_read_result = cpu_bus.ADDR_WIDTH'('b0);
+        case (state)
             IDLE: begin
                 // detect operation
                 if (cpu_bus.write_en) begin
@@ -56,60 +58,72 @@ module mem_io_mux (
                     // check routing
                     if (cpu_bus.write_addr == cpu_bus.ADDR_WIDTH'(-'d1)) begin
                         // route to io
-                        io_bus.out_pkt <= cpu_bus.write_val;
-                        io_bus.out_en <= 1;
-                        state <= WRITING_IO;
+                        io_bus.out_pkt = cpu_bus.write_val;
+                        io_bus.out_en = 1;
+                        next_state = WRITING_IO;
                     end else begin
                         // route to mem
-                        mem_bus.write_addr <= cpu_bus.write_addr;
-                        mem_bus.write_val <= cpu_bus.write_val;
-                        mem_bus.write_en <= 1;
-                        state <= WRITING_MEM;
+                        mem_bus.write_addr = cpu_bus.write_addr;
+                        mem_bus.write_val = cpu_bus.write_val;
+                        mem_bus.write_en = 1;
+                        next_state = WRITING_MEM;
                     end
                 end else if (cpu_bus.read_en) begin
                     // read
                     if (cpu_bus.read_addr == cpu_bus.ADDR_WIDTH'(-'d1)) begin
                         // route to io
-                        io_bus.in_en <= 1;
-                        state <= READING_IO;
+                        io_bus.in_en = 1;
+                        next_state = READING_IO;
                     end else begin
-                        mem_bus.read_addr <= cpu_bus.read_addr;
-                        mem_bus.read_en <= 1;
-                        state <= READING_MEM;
+                        mem_bus.read_addr = cpu_bus.read_addr;
+                        mem_bus.read_en = 1;
+                        next_state = READING_MEM;
                     end
                 end
             end
             WRITING_IO: begin
                 if (io_bus.output_status == busy::IDLE) begin
                     // if it has finished
-                    io_bus.out_en <= 0;
-                    state <= DONE;
+                    io_bus.out_en = 0;
+                    next_state = DONE;
                 end
             end
             WRITING_MEM: begin
                 if (mem_bus.write_status == busy::IDLE) begin
                     // finish
-                    mem_bus.write_en <= 0;
-                    state <= DONE;
+                    mem_bus.write_en = 0;
+                    next_state = DONE;
                 end
             end
             READING_IO: begin
                 if (io_bus.input_status == busy::IDLE) begin
-                    io_bus.in_en <= 0;
-                    cpu_bus.read_result <= io_bus.in_val;
-                    state <= DONE;
+                    io_bus.in_en = 0;
+                    next_cpu_read_result = io_bus.in_val;
+                    // cpu_bus.read_result = io_bus.in_val;
+                    next_state = DONE;
                 end
             end
             READING_MEM: begin
                 if (mem_bus.read_status == busy::IDLE) begin
-                    mem_bus.read_en <= 0;
-                    cpu_bus.read_result <= mem_bus.read_result;
-                    state <= DONE;
+                    mem_bus.read_en = 0;
+                    next_cpu_read_result = mem_bus.read_result;
+                    // cpu_bus.read_result = mem_bus.read_result;
+                    next_state = DONE;
                 end
             end
             DONE: begin
-                state <= IDLE;
+                next_state = IDLE;
             end
+            default: ;
         endcase
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            state <= IDLE;
+        end else begin
+            state <= next_state;
+            cpu_bus.read_result <= next_cpu_read_result;
+        end
     end
 endmodule

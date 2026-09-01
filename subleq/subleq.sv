@@ -35,6 +35,7 @@ module subleq #(
 
     memory memory (
         .clk(clk),
+        .rst(rst),
         .bus(mem_bus)
     );
 
