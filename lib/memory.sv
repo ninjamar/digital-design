@@ -15,43 +15,52 @@ interface mem_if#(
     logic write_en;
     logic [ITEM_WIDTH-1:0] read_result;
     
-    busy::status_t read_status;
-    busy::status_t write_status; // single cycle lock
+    logic read_done;
+    logic write_done;
 
     modport responder (
         // the input means that this moduel consumes this signal.
-        input /*clk,*/ read_addr, read_en, write_addr, write_val, write_en,
+        input read_addr, read_en, write_addr, write_val, write_en,
         // continuing, if this is an output, it becomes an input to something
         // else if it is chained.
-        output read_result, read_status, write_status
+        output read_result, read_done, write_done
     );
     modport requester (
-        input read_result, read_status, write_status,
-        output /*clk,*/ read_addr, read_en, write_addr, write_val, write_en
+        input read_result, read_done, write_done,
+        output read_addr, read_en, write_addr, write_val, write_en
     );
 endinterface
 
-module memory(input logic clk, /*input logic rst,*/ mem_if.responder bus);
+module memory(input logic clk, input logic rst, mem_if.responder bus);
     // read and write can happen the same cycle
     logic [bus.ITEM_WIDTH-1:0] memory [bus.ITEMS]; // 256 items x 8 bits per item = 2048 bits of mem = 256 bytes
 
     always_ff @(posedge clk) begin
-        // if (rst) begin
-            // memory <= ; // TODO: fix
-            // bus.write_status <= busy::IDLE;
-        // end else
-        if (bus.read_en) begin
-            bus.read_result <= memory[bus.read_addr];
-            bus.read_status <= busy::BUSY;
+        if (rst) begin
+            bus.read_done <= 0;
+            bus.write_done <= 0;
         end else begin
-            bus.read_status <= busy::IDLE;
-        end
-        
-        if (bus.write_en) begin // in sequential, you don't need all branches
-            memory[bus.write_addr] <= bus.write_val;
-            bus.write_status <= busy::BUSY;
-        end else begin
-            bus.write_status <= busy::IDLE;
+            // READ
+            // On single cycle: if idle, and requester is asking, read. 
+            // if completed and requester has dropped request, go back to idle.
+            // this requires caller to manage it's state. this is better
+            // because the _done is held not pulsed.
+            
+            // the requester holds read_en until it sees read_done
+            if (!bus.read_done && bus.read_en) begin
+                bus.read_result <= memory[bus.read_addr];
+                bus.read_done <= 1;
+            end else if (bus.read_done && !bus.read_en) begin
+                bus.read_done <= 0;
+            end
+
+            // WRITE
+            if (!bus.write_done && bus.write_en) begin
+                memory[bus.write_addr] <= bus.write_val;
+                bus.write_done <= 1;
+            end else if (bus.write_done && !bus.write_en) begin
+                bus.write_done <= 0;
+            end
         end
     end
 endmodule

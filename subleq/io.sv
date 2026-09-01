@@ -9,16 +9,16 @@ interface io_if #(
     logic [WIDTH-1:0] out_pkt;
     logic [WIDTH-1:0] in_val;
 
-    busy::status_t input_status;
-    busy::status_t output_status;
+    logic read_done;
+    logic write_done;
 
     modport responder(
-        input  /*clk, rst,*/ out_en, in_en, out_pkt,
-        output in_val, input_status, output_status
+        input out_en, in_en, out_pkt,
+        output in_val, read_done, write_done
     );
     modport requester(
-        input in_val, input_status, output_status,
-        output  /*clk, rst,*/ out_en, in_en, out_pkt
+        input in_val, read_done, write_done,
+        output out_en, in_en, out_pkt
     );
 endinterface
 
@@ -34,21 +34,22 @@ module io (
     always_ff @(posedge clk) begin
         if (rst) begin
             i <= 0;
-            bus.input_status <= busy::IDLE;
-            bus.output_status <= busy::IDLE;
+            bus.read_done <= 0;
+            bus.write_done <= 0;
         end else begin
-            if (bus.in_en) begin
-                bus.input_status <= busy::BUSY;
+            if (!bus.read_done && bus.in_en) begin
                 bus.in_val <= in_data[i];
-            end else begin
-                bus.input_status <= busy::IDLE;
+                bus.read_done <= 1;
+            end else if (bus.read_done && !bus.in_en) begin
+                bus.read_done <= 0;
             end
-            if (bus.out_en) begin
-                bus.output_status <= busy::BUSY;
+
+            if (!bus.write_done && bus.out_en) begin
                 // right now, dummy console output --in future, use uart
                 $display("%x", bus.out_pkt);
-            end else begin
-                bus.output_status <= busy::IDLE;
+                bus.write_done <= 1;
+            end else if (bus.write_done && !bus.out_en) begin
+                bus.write_done <= 0;
             end
         end
     end
