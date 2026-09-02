@@ -9,15 +9,15 @@ interface io_if #(
     logic [WIDTH-1:0] out_pkt;
     logic [WIDTH-1:0] in_val;
 
-    logic read_done;
-    logic write_done;
+    logic in_done;
+    logic out_done;
 
     modport responder(
         input out_en, in_en, out_pkt,
-        output in_val, read_done, write_done
+        output in_val, in_done, out_done
     );
     modport requester(
-        input in_val, read_done, write_done,
+        input in_val, in_done, out_done,
         output out_en, in_en, out_pkt
     );
 endinterface
@@ -34,22 +34,22 @@ module io (
     always_ff @(posedge clk) begin
         if (rst) begin
             i <= 0;
-            bus.read_done <= 0;
-            bus.write_done <= 0;
+            bus.in_done <= 0;
+            bus.out_done <= 0;
         end else begin
-            if (!bus.read_done && bus.in_en) begin
+            if (!bus.in_done && bus.in_en) begin
                 bus.in_val <= in_data[i];
-                bus.read_done <= 1;
-            end else if (bus.read_done && !bus.in_en) begin
-                bus.read_done <= 0;
+                bus.in_done <= 1;
+            end else if (bus.in_done && !bus.in_en) begin
+                bus.in_done <= 0;
             end
 
-            if (!bus.write_done && bus.out_en) begin
+            if (!bus.out_done && bus.out_en) begin
                 // right now, dummy console output --in future, use uart
                 $display("%x", bus.out_pkt);
-                bus.write_done <= 1;
-            end else if (bus.write_done && !bus.out_en) begin
-                bus.write_done <= 0;
+                bus.out_done <= 1;
+            end else if (bus.out_done && !bus.out_en) begin
+                bus.out_done <= 0;
             end
         end
     end

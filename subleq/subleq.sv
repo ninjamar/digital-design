@@ -56,27 +56,32 @@ module subleq #(
     );
 
     typedef enum logic [2:0] {
-        IDLE = 3'd0,
-        FETCH = 3'd1,
-        DECODE = 3'd2,
-        EXECUTE = 3'd3,
-        WRITE = 3'd4
+        IDLE,
+        FETCH,
+        DECODE,
+        EXECUTE,
+        WRITE
         //WAIT = 3'd5
     } state_t;
+
+    // Phase is for switching between ISSUING read/write request, and HOLDING
+    // until done, then RELEASING the read/write request. It still is used in
+    // conjunction with step
+    typedef enum logic [1:0] {
+        ISSUE,
+        HOLD,
+        RELEASE
+    } phase_t;
 
     // Control side
     typedef struct packed {
         state_t state;
+        phase_t phase;
         logic [3:0] step;
     } ctrl_t;
 
     ctrl_t ctrl;
     ctrl_t ctrl_next;
-
-    // state_t curr_state;
-    // state_t next_state;
-
-    // logic [3:0] step;
 
     // Datapath
     typedef struct packed {
@@ -98,9 +103,6 @@ module subleq #(
     regs_t regs;
     regs_t regs_next;
     
-    // Stall when mux is busy
-    logic stall;
-    assign stall = (mux_status == busy::BUSY);
     // Datapath
     always_comb begin
         // SUBLEQ: subtract and branch if less than or equal
@@ -110,6 +112,8 @@ module subleq #(
         // else: continue to next instruction (pc += 3)
 
         // States
+        ctrl_next.phase = ISSUE;
+        ctrl_next.step = ctrl_next.step + 1;
         ctrl_next.state = IDLE;
         regs_next = regs;
 
@@ -119,33 +123,34 @@ module subleq #(
         mux_bus.write_addr = ADDR_SIZE'('b0);
         mux_bus.write_val = XLEN'('b0);
         mux_bus.write_en = 0;
-
+    
         case (ctrl.state)
             IDLE: ctrl_next.state = FETCH;
             FETCH: begin
-                // Load instruction from memory
-                case (ctrl.step)
-                    0: begin
-                        mux_bus.read_addr   = regs.pc;
+                case (ctrl.phase)
+                    ISSUE: begin
+                        mux_bus.read_addr = regs.pc + ctrl.step;
                         mux_bus.read_en = 1;
-                        // CPU stalls here
-                        // Shift to mem wait state, then copy to a
-                        regs_next.a = mux_bus.read_result;
-                        ctrl_next.state  = FETCH;
+                        ctrl_next.phase = HOLD;
                     end
-                    1: begin
-                        mux_bus.read_addr   = regs.pc + 'd1;
-                        mux_bus.read_en = 1;
-                        regs_next.b = mux_bus.read_result;
-                        ctrl_next.state  = FETCH;
+                    HOLD: begin
+                        if (mux_bus.read_done) begin
+                            case (ctrl.step)
+                                0: regs_next.a = mux_bus.read_result;
+                                1: regs_next.b = mux_bus.read_result;
+                                2: regs_next.c = mux_bus.read_result;
+                            endcase
+                            ctrl_next.phase = RELEASE;
+                        end
                     end
-                    2: begin
-                        mux_bus.read_addr   = regs.pc + 'd2;
-                        mux_bus.read_en = 1;
-                        regs_next.c = mux_bus.read_result;
-                        ctrl_next.state  = DECODE;
+                    RELEASE: begin
+                        mux_bus.read_en = 0;
+                        ctrl_next.phase = ISSUE;
+                        if (ctrl.step == 2) begin
+                            ctrl_next.state = DECODE;
+                            ctrl_next.step = 0;
+                        end else ctrl_next.step = ctrl.step + 1;
                     end
-                    default: ;
                 endcase
             end
             DECODE: ctrl_next.state = EXECUTE;
@@ -154,47 +159,65 @@ module subleq #(
 
                 // Need to fetch mem[b] and mem[a]
                 // Separate based on read cycle
-                case (ctrl.step)
-                    // Mem a
-                    0: begin
-                        mux_bus.read_addr = regs.a;
-                        mux_bus.read_en = 1;
-                        regs_next.mem_a = mux_bus.read_result;
-                        ctrl_next.state  = EXECUTE;
-                    end
-                    // Mem b
-                    1: begin
-                        mux_bus.read_addr = regs.b;
-                        mux_bus.read_en = 1;
-                        regs_next.mem_b = mux_bus.read_result;
-
-                        ctrl_next.state  = EXECUTE;
-                    end
-                    2: begin
-                        // subtract mem[b] and mem[a]
-                        regs_next.sub_result = $signed(regs.mem_b - regs.mem_a);
-                        // store the final write of mem[b] (but do not write it to mem[b])
-                        // do the comparison, and update pc
-
-                        if (regs_next.sub_result <= 0) begin
-                            // jmp c
-                            regs_next.pc = regs.c;
-                        end else begin
-                            // increase pc
-                            regs_next.pc = regs.pc + 'd3;
+                if (ctrl.step != 2) begin
+                    case (ctrl.phase)
+                        ISSUE: begin
+                            case (ctrl.step)
+                                0: mux_bus.read_addr = regs.a;
+                                1: mux_bus.read_addr = regs.b;
+                            endcase
+                            mux_bus.read_en = 1;
+                            ctrl_next.phase = HOLD;
                         end
+                        HOLD: begin
+                            if (mux_bus.read_done) begin
+                                case (ctrl.step)
+                                    0: regs_next.mem_a = mux_bus.read_result;
+                                    1: regs_next.mem_b = mux_bus.read_result;
+                                endcase
+                                ctrl_next.phase = RELEASE;
+                            end
+                        end
+                        RELEASE: begin
+                            mux_bus.read_en = 0;
+                            if (ctrl.step != 2) begin
+                                ctrl_next.step = ctrl.step + 1;
+                            end
+                        end
+                    endcase
+                end else begin
+                     regs_next.sub_result = $signed(regs.mem_b - regs.mem_a);
+                    // store the final write of mem[b] (but do not write it to mem[b])
+                    // do the comparison, and update pc
 
-                        ctrl_next.state = WRITE;
+                    if (regs_next.sub_result <= 0) begin
+                        // jmp c
+                        regs_next.pc = regs.c;
+                    end else begin
+                        // increase pc
+                        regs_next.pc = regs.pc + 'd3;
                     end
-                    default: ;
-                endcase
+
+                    ctrl_next.state = WRITE;
+                end
             end
             WRITE: begin
                 // write mem[b]
-                mux_bus.write_addr = regs.b;
-                mux_bus.write_val  = $unsigned(regs.sub_result);
-                mux_bus.write_en = 1;
-
+                case (ctrl.phase)
+                    ISSUE: begin
+                        mux_bus.write_addr = regs.b;
+                        mux_bus.write_val  = $unsigned(regs.sub_result);
+                        mux_bus.write_en = 1;
+                    end
+                    HOLD: begin
+                        if (mux_bus.write_done) begin
+                            ctrl_next.phase = RELEASE;
+                        end
+                    end
+                    RELEASE: begin
+                        mux_bus.write_en = 0;
+                    end
+                endcase
                 // write, then next cycle clear write_enable to 0
                 ctrl_next.state = FETCH;
             end
@@ -209,13 +232,15 @@ module subleq #(
             ctrl.step <= 'b0;
 
             regs <= '{default: 0};  // reset back to default of 0
-        end else if (!stall) begin
+        end else begin
             // Only increment if we are not switching.
+            /*
             if (ctrl.state == ctrl_next.state) begin
                 ctrl.step <= ctrl.step + 1;
             end else begin
                 ctrl.step <= 'b0;
             end
+            */
 
             ctrl.state <= ctrl_next.state;
 
