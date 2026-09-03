@@ -98,6 +98,10 @@ module subleq #(
     regs_t regs_next;
     
     // Datapath
+
+    logic is_out;
+    logic is_in;
+
     always_comb begin
         // SUBLEQ: subtract and branch if less than or equal
         // subleq a, b, c
@@ -107,6 +111,7 @@ module subleq #(
 
         // States
         ctrl_next = ctrl;
+        // ctrl_next = ctrl;
         regs_next = regs;
 
         // Safe defaults (combinational)
@@ -119,6 +124,9 @@ module subleq #(
         sel_io_read = 0;
         sel_io_write = 0;
         
+        is_out = regs.b == -'d1;
+        is_in = regs.a == -'d1;
+
         case (ctrl.state)
             IDLE: ctrl_next.state = FETCH;
             FETCH: begin
@@ -141,29 +149,45 @@ module subleq #(
             DECODE: ctrl_next.state = EXECUTE;
             EXECUTE: begin
                 if (ctrl.step != 2) begin
-                    if (mux_bus.read_done) begin
-                        case (ctrl.step)
-                            0: regs_next.mem_a = mux_bus.read_result;
-                            1: regs_next.mem_b = mux_bus.read_result;
-                        endcase
-
-                        mux_bus.read_en = 0;
-                        if (ctrl.step != 2) begin
-                            ctrl_next.step = ctrl.step + 1;
+                    if (is_out && ctrl.step == 1) begin
+                        if (mux_bus.write_done) begin
+                            regs_next.pc = regs.pc + 'd3;
+                            mux_bus.write_en = 0;
+                            ctrl_next.state = FETCH;
+                            ctrl_next.step = 0;
+                        end else begin
+                            sel_io_write = 1;
+                            mux_bus.write_val = regs.mem_a;
+                            mux_bus.write_en = 1;
                         end
                     end else begin
-                        // Need to fetch mem[b] and mem[a]
+                        if (mux_bus.read_done) begin
+                            case (ctrl.step)
+                                0: regs_next.mem_a = mux_bus.read_result;
+                                1: regs_next.mem_b = mux_bus.read_result;
+                            endcase
 
-                        case (ctrl.step)
-                            0: mux_bus.read_addr = regs.a;
-                            1: mux_bus.read_addr = regs.b;
-                        endcase
-                        mux_bus.read_en = 1;
+                            mux_bus.read_en = 0;
+                            ctrl_next.step = ctrl.step + 1;
+                        end else begin
+                            // Need to fetch mem[b] and mem[a]
+
+                            case (ctrl.step)
+                                0: begin
+                                    sel_io_read = is_in; // read from io if a == -1
+                                    mux_bus.read_addr = regs.a;
+                                end 
+                                1: mux_bus.read_addr = regs.b; // is_in -> use real addr to write
+                            endcase
+                            mux_bus.read_en = 1;
+                        end
                     end
                 end else begin
                     // Execute instruction
 
-                    regs_next.sub_result = $signed(regs.mem_b - regs.mem_a);
+                    regs_next.sub_result = is_in
+                        ? $signed(regs.mem_b + regs.mem_a) // for hsq on in: mem[b] += ch
+                        : $signed(regs.mem_b - regs.mem_a);
                     // store the final write of mem[b] (but do not write it to mem[b])
                     // do the comparison, and update pc
 
@@ -210,18 +234,14 @@ module subleq #(
         end else if (!ctrl.stall) begin
             // Only increment if we are not switching.
             
+            ctrl <= ctrl_next;
+            // As this is non-blocking, values update only after the clock
+            // changes
+
+            // Here, ctrl has NOT changed yet
             if (ctrl.state != ctrl_next.state) begin
                 ctrl.step <= 'b0;
             end
-            /*
-            if (ctrl.state == ctrl_next.state) begin
-                ctrl.step <= ctrl.step + 1;
-            end else begin
-                ctrl.step <= 'b0;
-            end
-            */
-            ctrl <= ctrl_next;
-            
 
             // ctrl.step <= ctrl_next.step
             // ctrl.state <= ctrl_next.state;
