@@ -1,6 +1,8 @@
 module mem_io_mux (
     input logic clk,
     input logic rst,
+    input logic sel_io_read,
+    input logic sel_io_write,
     mem_if.responder cpu_bus,
 
     mem_if.requester mem_bus,
@@ -16,11 +18,11 @@ module mem_io_mux (
 
     // Right now, mux is a combinational router
 
-    logic sel_io_read;
-    logic sel_io_write;
+    // logic sel_io_read;
+    // logic sel_io_write;
     always_comb begin
-        sel_io_read = (cpu_bus.read_addr == cpu_bus.ADDR_WIDTH'(-'d1));
-        sel_io_write = (cpu_bus.read_addr == cpu_bus.ADDR_WIDTH'(-'d1));
+        // sel_io_read = (cpu_bus.read_addr == cpu_bus.ADDR_WIDTH'(-'d1));
+        // sel_io_write = (cpu_bus.write_addr == cpu_bus.ADDR_WIDTH'(-'d1));
 
         // Read inputs
         io_bus.in_en = (cpu_bus.read_en && sel_io_read);

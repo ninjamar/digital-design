@@ -39,6 +39,7 @@ module io (
         end else begin
             if (!bus.in_done && bus.in_en) begin
                 bus.in_val <= in_data[i];
+                i <= i + 1;
                 bus.in_done <= 1;
             end else if (bus.in_done && !bus.in_en) begin
                 bus.in_done <= 0;
@@ -46,7 +47,8 @@ module io (
 
             if (!bus.out_done && bus.out_en) begin
                 // right now, dummy console output --in future, use uart
-                $display("%x", bus.out_pkt);
+                // $write has no trailing newline; $display does
+                $write("%c", bus.out_pkt);
                 bus.out_done <= 1;
             end else if (bus.out_done && !bus.out_en) begin
                 bus.out_done <= 0;
