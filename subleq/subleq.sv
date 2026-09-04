@@ -22,14 +22,14 @@ module subleq #(
         .ITEM_WIDTH(XLEN  /* default 8 */),
         .ADDR_WIDTH(ADDR_SIZE  /* default 8 */),
         .ITEMS(ITEMS  /* default 2 ** ADDR_WIDTH */)
-    ) mux_bus (); // writer
+    ) mux_bus ();  // writer
 
     // Write memory directly
     mem_if #(
-        .ITEM_WIDTH(XLEN /* default 8 */),
-        .ADDR_WIDTH(ADDR_SIZE /* default 8 */),
-        .ITEMS     (ITEMS /* default 2 ** ADDR_WIDTH */)
-     ) mem_bus ();
+        .ITEM_WIDTH(XLEN  /* default 8 */),
+        .ADDR_WIDTH(ADDR_SIZE  /* default 8 */),
+        .ITEMS(ITEMS  /* default 2 ** ADDR_WIDTH */)
+    ) mem_bus ();
 
     io_if #(.WIDTH(XLEN  /* default 8 */)) io_bus ();
 
@@ -96,7 +96,7 @@ module subleq #(
     // Control side
     regs_t regs;
     regs_t regs_next;
-    
+
     // Datapath
 
     logic is_out;
@@ -120,10 +120,14 @@ module subleq #(
         mux_bus.write_addr = ADDR_SIZE'('b0);
         mux_bus.write_val = XLEN'('b0);
         mux_bus.write_en = 0;
-    
-        sel_io_read = 0;
-        sel_io_write = 0;
-        
+
+        // If these signals are driven inside read_done, then verilator considers
+        // them unoptimizable because they depend on read_done, which is what
+        // these signals drive.
+
+        sel_io_read = (ctrl.state == EXECUTE) && (ctrl.step == 0) && is_in;
+        sel_io_write = (ctrl.state == EXECUTE) && (ctrl.step == 1) && is_out;
+
         is_out = regs.b == -'d1;
         is_in = regs.a == -'d1;
 
@@ -139,11 +143,11 @@ module subleq #(
                     mux_bus.read_en = 0;
                     if (ctrl.step == 2) begin
                         ctrl_next.state = DECODE;
-                        ctrl_next.step = 0;
+                        ctrl_next.step  = 0;
                     end else ctrl_next.step = ctrl.step + 1;
                 end else begin
                     mux_bus.read_addr = regs.pc + ctrl.step;
-                    mux_bus.read_en = 1;
+                    mux_bus.read_en   = 1;
                 end
             end
             DECODE: ctrl_next.state = EXECUTE;
@@ -156,9 +160,9 @@ module subleq #(
                             ctrl_next.state = FETCH;
                             ctrl_next.step = 0;
                         end else begin
-                            sel_io_write = 1;
+                            // sel_io_write = 1;
                             mux_bus.write_val = regs.mem_a;
-                            mux_bus.write_en = 1;
+                            mux_bus.write_en  = 1;
                         end
                     end else begin
                         if (mux_bus.read_done) begin
@@ -168,16 +172,16 @@ module subleq #(
                             endcase
 
                             mux_bus.read_en = 0;
-                            ctrl_next.step = ctrl.step + 1;
+                            ctrl_next.step  = ctrl.step + 1;
                         end else begin
                             // Need to fetch mem[b] and mem[a]
 
                             case (ctrl.step)
                                 0: begin
-                                    sel_io_read = is_in; // read from io if a == -1
+                                    // sel_io_read = is_in; // read from io if a == -1
                                     mux_bus.read_addr = regs.a;
-                                end 
-                                1: mux_bus.read_addr = regs.b; // is_in -> use real addr to write
+                                end
+                                1: mux_bus.read_addr = regs.b;  // is_in -> use real addr to write
                             endcase
                             mux_bus.read_en = 1;
                         end
@@ -185,8 +189,8 @@ module subleq #(
                 end else begin
                     // Execute instruction
 
-                    regs_next.sub_result = is_in
-                        ? $signed(regs.mem_b + regs.mem_a) // for hsq on in: mem[b] += ch
+                    regs_next.sub_result = is_in ?
+                        $signed(regs.mem_b + regs.mem_a)  // for hsq on in: mem[b] += ch
                         : $signed(regs.mem_b - regs.mem_a);
                     // store the final write of mem[b] (but do not write it to mem[b])
                     // do the comparison, and update pc
@@ -205,17 +209,17 @@ module subleq #(
                     end
 
                     ctrl_next.state = WRITE;
-                end 
+                end
             end
             WRITE: begin
                 // write mem[b]
                 if (mux_bus.write_done) begin
                     mux_bus.write_en = 0;
-                    ctrl_next.state = FETCH;
+                    ctrl_next.state  = FETCH;
                 end else begin
                     mux_bus.write_addr = regs.b;
                     mux_bus.write_val  = $unsigned(regs.sub_result);
-                    mux_bus.write_en = 1;
+                    mux_bus.write_en   = 1;
                 end
                 // write, then next cycle clear write_enable to 0
             end
@@ -233,7 +237,7 @@ module subleq #(
             regs <= '{default: 0};  // reset back to default of 0
         end else if (!ctrl.stall) begin
             // Only increment if we are not switching.
-            
+
             ctrl <= ctrl_next;
             // As this is non-blocking, values update only after the clock
             // changes

@@ -29,11 +29,11 @@ module mem_io_mux (
 
         mem_bus.read_en = (cpu_bus.read_en && !sel_io_read);
         mem_bus.read_addr = cpu_bus.read_addr;
-        
+
         // Write inputs
         io_bus.out_en = (cpu_bus.write_en && sel_io_write);
         io_bus.out_pkt = cpu_bus.write_val;
-        
+
         mem_bus.write_en = (cpu_bus.write_en && !sel_io_write);
         mem_bus.write_addr = cpu_bus.write_addr;
         mem_bus.write_val = cpu_bus.write_val;
@@ -41,7 +41,7 @@ module mem_io_mux (
         // Passthrough results to cpu bus. The requester still has to maintain
         // handshake
         cpu_bus.read_result = sel_io_read ? io_bus.in_val : mem_bus.read_result;
-        
+
         cpu_bus.read_done = sel_io_read ? io_bus.in_done : mem_bus.read_done;
         cpu_bus.write_done = sel_io_write ? io_bus.out_done : mem_bus.write_done;
     end

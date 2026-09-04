@@ -1,0 +1,4 @@
+void main(){
+    char *s = "Hello, World!";
+    while (*s) __out *s++;
+}

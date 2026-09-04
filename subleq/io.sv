@@ -12,14 +12,8 @@ interface io_if #(
     logic in_done;
     logic out_done;
 
-    modport responder(
-        input out_en, in_en, out_pkt,
-        output in_val, in_done, out_done
-    );
-    modport requester(
-        input in_val, in_done, out_done,
-        output out_en, in_en, out_pkt
-    );
+    modport responder(input out_en, in_en, out_pkt, output in_val, in_done, out_done);
+    modport requester(input in_val, in_done, out_done, output out_en, in_en, out_pkt);
 endinterface
 
 module io (
