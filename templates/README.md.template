@@ -1,0 +1,15 @@
+# @PROJECT@
+
+## Layout
+
+- `rtl/` — synthesizable sources
+- `tb/`  — testbenches (`tb_*.sv`); dump waves to `waveforms/` (gitignored)
+- `config.mk` — `TOP`, `BOARD`, `LIB`
+- `@PROJECT@.xdc` — board constraints
+
+## Usage
+
+    just lint @PROJECT@
+    just tb @PROJECT@
+    just all @PROJECT@
+    just flash @PROJECT@

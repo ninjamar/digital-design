@@ -1,3 +1,6 @@
 [submodule "subleq/hsq"]
-	path = subleq/hsq
+	path = subleq/toolchain/hsq
+	url = https://github.com/8l/hsq
+[submodule "subleq/toolchain/hsq"]
+	path = subleq/toolchain/hsq
 	url = https://github.com/8l/hsq

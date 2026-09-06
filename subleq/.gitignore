@@ -1,0 +1,3 @@
+# Generated HSQ build artifacts
+prog/*.sq
+prog/*.hex

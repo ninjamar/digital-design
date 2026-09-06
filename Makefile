@@ -27,7 +27,7 @@ LINTER      ?= vivado
 SIMULATOR   ?= verilator
 TB          ?=
 
-.PHONY: lint synth impl bitstream program ensure-hw-server format testbench testbench-build testbench-run all clean new-project
+.PHONY: lint synth impl bitstream program ensure-hw-server format testbench testbench-build testbench-run all clean new-project check-srcs prebuild
 
 HW_SERVER_PORT ?= 3121
 
@@ -52,13 +52,23 @@ PART        := $(PART_$(BOARD))
 CFGMEM      := $(CFGMEM_$(BOARD))
 CFGMEM_SIZE := $(CFGMEM_SIZE_$(BOARD))
 XDC      := $(PROJECT)/$(notdir $(PROJECT)).xdc
-ALL_SRCS := $(wildcard $(PROJECT)/*.sv $(PROJECT)/*.v)
-SRCS     := $(filter-out $(PROJECT)/tb_%,$(ALL_SRCS)) $(wildcard $(LIB))
-TB_SRCS  := $(filter $(PROJECT)/tb_%,$(ALL_SRCS))
+RTL_SRCS := $(wildcard $(PROJECT)/rtl/*.sv $(PROJECT)/rtl/*.v)
+TB_SRCS  := $(wildcard $(PROJECT)/tb/*.sv $(PROJECT)/tb/*.v)
+ALL_SRCS := $(RTL_SRCS) $(TB_SRCS)
+SRCS     := $(RTL_SRCS) $(LIB)
 BUILD    := build/$(PROJECT)
 endif
 
-lint:
+# Optional per-project prebuild step (set PREBUILD in $(PROJECT)/config.mk).
+PREBUILD ?=
+prebuild:
+	$(if $(strip $(PREBUILD)),$(PREBUILD),@:)
+
+check-srcs: prebuild
+	@test -n "$(strip $(RTL_SRCS))" || { echo "error: no RTL sources in $(PROJECT)/rtl/" >&2; exit 1; }
+	@for f in $(SRCS); do test -f "$$f" || { echo "error: missing source: $$f" >&2; exit 1; }; done
+
+lint: check-srcs
 ifeq ($(LINTER),verilator)
 	verilator --lint-only --sv -Wall --top-module $(TOP) $(SRCS)
 else
@@ -70,13 +80,13 @@ format:
 
 testbench: testbench-build testbench-run
 
-testbench-build:
-	./scripts/testbench.sh build $(PROJECT) $(SIMULATOR) $(BUILD) $(CURDIR) $(SRCS) -- $(if $(TB),$(PROJECT)/$(TB),$(TB_SRCS))
+testbench-build: check-srcs
+	./scripts/testbench.sh build $(PROJECT) $(SIMULATOR) $(BUILD) $(CURDIR) $(SRCS) -- $(if $(TB),$(PROJECT)/tb/$(TB),$(TB_SRCS))
 
 testbench-run:
-	./scripts/testbench.sh run $(PROJECT) $(SIMULATOR) $(BUILD) $(CURDIR) $(SRCS) -- $(if $(TB),$(PROJECT)/$(TB),$(TB_SRCS))
+	./scripts/testbench.sh run $(PROJECT) $(SIMULATOR) $(BUILD) $(CURDIR) $(SRCS) -- $(if $(TB),$(PROJECT)/tb/$(TB),$(TB_SRCS))
 
-$(BUILD)/post_synth.dcp: $(SRCS) $(XDC)
+$(BUILD)/post_synth.dcp: $(SRCS) $(XDC) | check-srcs
 	mkdir -p $(BUILD)
 	$(VIVADO) scripts/synth.tcl -tclargs $(TOP) $(PART) "$(SRCS)" $(XDC) $(BUILD) $(FAST) $(THREADS)
 
@@ -119,7 +129,8 @@ ifndef BOARD
 	$(error usage: make new-project PROJECT=<dir> BOARD=<board>)
 endif
 	@test ! -e $(PROJECT) || (echo "error: $(PROJECT) already exists" && exit 1)
-	mkdir -p $(PROJECT)
+	mkdir -p $(PROJECT)/rtl $(PROJECT)/tb
 	cp $(XDC_MASTER_$(BOARD)) $(PROJECT)/$(notdir $(PROJECT)).xdc
 	sed 's/@BOARD@/$(BOARD)/' templates/config.mk.template > $(PROJECT)/config.mk
-	@echo "Created $(PROJECT)/. Set TOP in config.mk, then trim $(PROJECT)/$(notdir $(PROJECT)).xdc"
+	sed 's/@PROJECT@/$(notdir $(PROJECT))/' templates/README.md.template > $(PROJECT)/README.md
+	@echo "Created $(PROJECT)/ with rtl/, tb/, README.md. Set TOP in config.mk, then trim $(PROJECT)/$(notdir $(PROJECT)).xdc"

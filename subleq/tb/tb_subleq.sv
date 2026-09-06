@@ -11,11 +11,11 @@ module tb_subleq;
     always #5 clk = ~clk;
 
     initial begin
-        $dumpfile("subleq.fst");
+        $dumpfile("waveforms/subleq.fst");
         $dumpvars(3, dut);  // depth 2
 
         $display("Starting CPU");
-        $readmemh("./subleq/prog.hex", dut.memory.memory);
+        $readmemh("prog/prog.hex", dut.memory.memory);
         // if the program uses __in:
         // $readmemh("input.hex", dut.io.in_data);
         rst = 1;
