@@ -15,7 +15,7 @@ module tb_subleq;
         $dumpvars(3, dut);  // depth 2
 
         $display("Starting CPU");
-        $readmemh("prog/prog.hex", dut.memory.memory);
+        $readmemh("prog/prog.hex", dut.memory.mem);
         // if the program uses __in:
         // $readmemh("input.hex", dut.io.in_data);
         rst = 1;

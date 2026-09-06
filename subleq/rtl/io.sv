@@ -23,7 +23,10 @@ module io (
 );
 
     logic [31:0] i;
+    /* verilator lint_off UNDRIVEN */
     logic [31:0][bus.WIDTH-1:0] in_data;
+    /* verilator lint_on UNDRIVEN */
+    
     // Mock data for now: in the future, input could come via UART
     always_ff @(posedge clk) begin
         if (rst) begin

@@ -33,7 +33,7 @@ endinterface
 
 module memory(input logic clk, input logic rst, mem_if.responder bus);
     // read and write can happen the same cycle
-    logic [bus.ITEM_WIDTH-1:0] memory [bus.ITEMS]; // 256 items x 8 bits per item = 2048 bits of mem = 256 bytes
+    logic [bus.ITEM_WIDTH-1:0] mem [bus.ITEMS]; // 256 items x 8 bits per item = 2048 bits of mem = 256 bytes
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -48,7 +48,7 @@ module memory(input logic clk, input logic rst, mem_if.responder bus);
             
             // the requester holds read_en until it sees read_done
             if (!bus.read_done && bus.read_en) begin
-                bus.read_result <= memory[bus.read_addr];
+                bus.read_result <= mem[bus.read_addr];
                 bus.read_done <= 1;
             end else if (bus.read_done && !bus.read_en) begin
                 bus.read_done <= 0;
@@ -56,7 +56,7 @@ module memory(input logic clk, input logic rst, mem_if.responder bus);
 
             // WRITE
             if (!bus.write_done && bus.write_en) begin
-                memory[bus.write_addr] <= bus.write_val;
+                mem[bus.write_addr] <= bus.write_val;
                 bus.write_done <= 1;
             end else if (bus.write_done && !bus.write_en) begin
                 bus.write_done <= 0;

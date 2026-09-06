@@ -49,8 +49,6 @@ module subleq #(
     logic sel_io_write;
 
     mem_io_mux mem_io_mux (
-        .clk(clk),
-        .rst(rst),
         .sel_io_read(sel_io_read),
         .sel_io_write(sel_io_write),
         .cpu_bus(mux_bus),
@@ -125,11 +123,11 @@ module subleq #(
         // them unoptimizable because they depend on read_done, which is what
         // these signals drive.
 
-        sel_io_read = (ctrl.state == EXECUTE) && (ctrl.step == 0) && is_in;
-        sel_io_write = (ctrl.state == EXECUTE) && (ctrl.step == 1) && is_out;
-
         is_out = regs.b == -'d1;
         is_in = regs.a == -'d1;
+
+        sel_io_read = (ctrl.state == EXECUTE) && (ctrl.step == 0) && is_in;
+        sel_io_write = (ctrl.state == EXECUTE) && (ctrl.step == 1) && is_out;
 
         case (ctrl.state)
             IDLE: ctrl_next.state = FETCH;
@@ -146,7 +144,7 @@ module subleq #(
                         ctrl_next.step  = 0;
                     end else ctrl_next.step = ctrl.step + 1;
                 end else begin
-                    mux_bus.read_addr = regs.pc + ctrl.step;
+                    mux_bus.read_addr = regs.pc + ADDR_SIZE'(ctrl.step);
                     mux_bus.read_en   = 1;
                 end
             end

@@ -1,6 +1,4 @@
 module mem_io_mux (
-    input logic clk,
-    input logic rst,
     input logic sel_io_read,
     input logic sel_io_write,
     mem_if.responder cpu_bus,
